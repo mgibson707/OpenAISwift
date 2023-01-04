@@ -32,6 +32,7 @@ public enum OpenAIModelType {
     public enum GPT3: String {
         
         /// Most capable GPT-3 model. Can do any task the other models can do, often with higher quality, longer output and better instruction-following. Also supports inserting completions within text.
+        /// Training data up to Jun 2021.
         ///
         /// > Model Name: text-davinci-003
         case davinci = "text-davinci-003"
