@@ -76,6 +76,7 @@ public class OpenAIStreamHandler: StreamEventHandler, ObservableObject {
     @Published var streamLatest: String = ""
     
     @Published var streamObject: OpenAI?
+    @Published var streamError: Error?
     
     public var finishReason: Choice.FinishReason?
         
@@ -97,7 +98,9 @@ public class OpenAIStreamHandler: StreamEventHandler, ObservableObject {
     }
     
 
-    
+    public func onError(error: Error) {
+        streamError = error
+    }
 
     
     

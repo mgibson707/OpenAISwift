@@ -28,7 +28,7 @@ final class OpenAISwiftTests: XCTestCase {
         let expectedResponse = expectation(description: "Generated response text")
         
         var subs = Set<AnyCancellable>()
-        let pub = try tester.completionStreamPublisher(with: "Write me a joke:", maxTokens: 64)
+        let pub = try tester.completionStreamPublisher(with: "Write me a joke in the style of Trever Noah:", maxTokens: 64)
         pub.sink { completed in
             switch completed {
             case .failure(let err):

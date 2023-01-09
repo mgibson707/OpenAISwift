@@ -91,6 +91,7 @@ public class OpenAISwift {
         // Create EventSource object for this generation response stream
         let eventSource = EventSource(config: config)
         
+        // route stream handler objects to EventSource publisher
         eventStreamHandler.$streamObject.sink { resObj in
             eventSource.currentStreamToken.send(resObj)
             
@@ -101,6 +102,13 @@ public class OpenAISwift {
             }
         }.store(in: &streams)
         
+        // route stream error to EventSource publisher - complete with error
+        eventStreamHandler.$streamError.compactMap({$0}).sink { errorInStream in
+            eventSource.currentStreamToken.send(completion: .failure(errorInStream))
+        }.store(in: &streams)
+        
+        //TODO: get rid of this ambiguous timing for starting
+        //start the stream before returning
         eventSource.start()
         return eventSource.streamPublisher.compactMap({$0 as? OpenAI}).eraseToAnyPublisher()
     }
