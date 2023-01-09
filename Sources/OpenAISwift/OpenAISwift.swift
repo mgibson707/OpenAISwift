@@ -60,7 +60,7 @@ public class OpenAISwift {
 //        return EventSource(config: eventSourceConfig)
 //    }
     
-    func completionStreamPublisher(for model: OpenAIModelType = .gpt3(.davinci), with prompt: String, maxTokens: Int = 16) throws -> AnyPublisher<OpenAI, Error> {
+    public func completionStreamPublisher(for model: OpenAIModelType = .gpt3(.davinci), with prompt: String, maxTokens: Int = 16) throws -> AnyPublisher<OpenAI, Error> {
         
         // Handler for events recieved on the EventSource stream once started
         let eventStreamHandler: OpenAIStreamHandler = OpenAIStreamHandler()
