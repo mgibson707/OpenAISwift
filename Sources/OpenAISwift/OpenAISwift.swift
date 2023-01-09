@@ -60,7 +60,7 @@ public class OpenAISwift {
 //        return EventSource(config: eventSourceConfig)
 //    }
     
-    public func completionStreamPublisher(for model: OpenAIModelType = .gpt3(.davinci), with prompt: String, maxTokens: Int = 16) throws -> AnyPublisher<OpenAI?, Error> {
+    public func completionStreamPublisher(for model: OpenAIModelType = .gpt3(.davinci), with prompt: String, maxTokens: Int = 16) -> AnyPublisher<OpenAI?, Error>? {
         
         // Handler for events recieved on the EventSource stream once started
         let eventStreamHandler: OpenAIStreamHandler = OpenAIStreamHandler()
@@ -77,7 +77,7 @@ public class OpenAISwift {
                               "Host": "api.openai.com"]
         } else {
             print("[OpenAISwift] Warning: No Auth Key Provided. Please configure your API Key")
-            throw OpenAIError.noAPIKey
+            return nil
         }
         // config disable retry on error
         config.connectionErrorHandler = { _ in .shutdown }
@@ -86,7 +86,11 @@ public class OpenAISwift {
     
         // config HTTP request body
         let body = Command(prompt: prompt, model: model.modelName, maxTokens: maxTokens, stream: true)
-        config.body = try JSONEncoder().encode(body)
+        guard let bodyData = try? JSONEncoder().encode(body) else {
+            print("[OpenAISwift] Warning: Body data could not be encoded to JSON. Cannot create stream.")
+            return nil
+        }
+        config.body = bodyData
 
         // Create EventSource object for this generation response stream
         let eventSource = EventSource(config: config)
