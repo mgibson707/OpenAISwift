@@ -97,12 +97,17 @@ public class OpenAISwift {
         
         // route stream handler objects to EventSource publisher
         eventStreamHandler.$streamObject.sink { resObj in
-            eventSource.currentStreamToken.send(resObj)
+            DispatchQueue.main.async {
+                eventSource.currentStreamToken.send(resObj)
+
+            }
             
             // check for end of stream. send complete signal to subscribers if found.
             if let finishReason = resObj?.choices.first?.finishReason {
                 print("pub finished with reason: \(finishReason)")
-                eventSource.currentStreamToken.send(completion: .finished)
+                DispatchQueue.main.async {
+                    eventSource.currentStreamToken.send(completion: .finished)
+                }
             }
         }.store(in: &streams)
         
