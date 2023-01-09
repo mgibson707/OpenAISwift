@@ -1,4 +1,5 @@
 import XCTest
+import Combine
 @testable import OpenAISwift
 var tester: OpenAISwift?
 
@@ -10,6 +11,40 @@ final class OpenAISwiftTests: XCTestCase {
     
     override class func setUp() {
         tester = OpenAISwift(authToken: Constants.openAIAPIKey)
+    }
+    
+//    func testStreamer() throws {
+//        guard let tester = tester else {XCTFail("No Tester"); throw TestError.noTester}
+//        let expectedResponse = expectation(description: "Generated response text")
+//
+//        let source = try tester.configureStreaming(with: "Here's the thing about large larguage models,", maxTokens: 64)
+//        source.start()
+//        wait(for: [expectedResponse], timeout: 20)
+//
+//    }
+    
+    func testStreamPub() throws {
+        guard let tester = tester else {XCTFail("No Tester"); throw TestError.noTester}
+        let expectedResponse = expectation(description: "Generated response text")
+        
+        var subs = Set<AnyCancellable>()
+        let pub = try tester.completionStreamPublisher(with: "Write me a joke:", maxTokens: 64)
+        pub.sink { completed in
+            switch completed {
+            case .failure(let err):
+                print("Finished Pub with error: \(err)")
+                XCTFail("stream finished with error")
+            case .finished:
+                print("Pub finished without error")
+            }
+            expectedResponse.fulfill()
+        } receiveValue: { resObj in
+            print(resObj)
+        }.store(in: &subs)
+        
+        wait(for: [expectedResponse], timeout: 40)
+
+
     }
     
     // Testing clusure based method. Uses XCTestExpectations to make test wait for result.

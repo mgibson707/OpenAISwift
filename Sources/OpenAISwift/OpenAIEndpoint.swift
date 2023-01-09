@@ -4,7 +4,7 @@
 
 import Foundation
 
-enum Endpoint {
+enum Endpoint: CaseIterable {
     case completions
     case edits
 }
@@ -31,5 +31,13 @@ extension Endpoint {
         case .completions, .edits:
             return "https://api.openai.com"
         }
+    }
+    
+    func fullURL() -> URL {
+        switch self {
+        case .completions, .edits:
+            return URL(string: baseURL() + path)!
+        }
+        
     }
 }

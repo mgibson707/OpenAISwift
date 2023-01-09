@@ -4,18 +4,105 @@ import FoundationNetworking
 import FoundationXML
 #endif
 import Combine
+import LDSwiftEventSource
 
 public enum OpenAIError: Error {
     case genericError(error: Error)
     case decodingError(error: Error)
     case noClient
+    case streamingError(error: Error?)
+    case noAPIKey
 }
+
+
 
 public class OpenAISwift {
     internal fileprivate(set) var token: String?
     
+    //var completionStream: EventSource?
+
+    //private var eventSourceConfig: EventSource.Config?
+    //private var eventHandler: EventHandler = OpenAIStreamHandler()
+    
+    private var streams = Set<AnyCancellable>()
+
     public init(authToken: String) {
         self.token = authToken
+
+//        self.eventSourceConfig = EventSource.Config(handler: eventHandler, url: Endpoint.completions.fullURL())
+//        // add auth header to config if auth token is set
+//        if let token = token, !token.isEmpty {
+//            eventSourceConfig.headers = ["Authorization": "Bearer \(token)"]
+//        }
+//        eventSourceConfig.method = Endpoint.completions.method
+        
+    }
+    
+//    func configureStreaming(for model: OpenAIModelType = .gpt3(.davinci), with prompt: String, maxTokens: Int = 16) throws -> EventSource {
+//        //let handler: EventHandler = OpenAIStreamHandler()
+//
+//        eventSourceConfig = EventSource.Config(handler: eventHandler, url: Endpoint.completions.fullURL())
+//        //eventSourceConfig?.connectionErrorHandler = handleErr(err:)
+//        eventSourceConfig?.connectionErrorHandler = { _ in .shutdown }
+//
+//        // add auth header to config if auth token is set
+//        if let token = token, !token.isEmpty {
+//            eventSourceConfig?.headers = ["Authorization": "Bearer \(token)", "Accept": "text/event-stream", "Cache-Control": "no-cache", "Content-Type": "application/json", "Host": "api.openai.com"]
+//        } else { print("No Auth Provided. Omitting Authorization Header") }
+//
+//        let body = Command(prompt: prompt, model: model.modelName, maxTokens: maxTokens, stream: true)
+//
+//        eventSourceConfig?.method = Endpoint.completions.method
+//        eventSourceConfig?.body = try JSONEncoder().encode(body)
+//
+//        guard let eventSourceConfig = eventSourceConfig else { throw OpenAIError.streamingError(error: nil)}
+//
+//        return EventSource(config: eventSourceConfig)
+//    }
+    
+    func completionStreamPublisher(for model: OpenAIModelType = .gpt3(.davinci), with prompt: String, maxTokens: Int = 16) throws -> AnyPublisher<OpenAI, Error> {
+        
+        // Handler for events recieved on the EventSource stream once started
+        let eventStreamHandler: OpenAIStreamHandler = OpenAIStreamHandler()
+        
+        // Create a configuration struct, initialized with the event handler and generations endpoint URL
+        var config = EventSource.Config(handler: eventStreamHandler, url: Endpoint.completions.fullURL())
+        
+        // add auth header to config if auth token is set
+        if let token = token, !token.isEmpty {
+            config.headers = ["Authorization": "Bearer \(token)",
+                              "Accept": "text/event-stream",
+                              "Cache-Control": "no-cache",
+                              "Content-Type": "application/json",
+                              "Host": "api.openai.com"]
+        } else {
+            print("[OpenAISwift] Warning: No Auth Key Provided. Please configure your API Key")
+            throw OpenAIError.noAPIKey
+        }
+        // config disable retry on error
+        config.connectionErrorHandler = { _ in .shutdown }
+        // config HTTP request Method
+        config.method = Endpoint.completions.method
+    
+        // config HTTP request body
+        let body = Command(prompt: prompt, model: model.modelName, maxTokens: maxTokens, stream: true)
+        config.body = try JSONEncoder().encode(body)
+
+        // Create EventSource object for this generation response stream
+        let eventSource = EventSource(config: config)
+        
+        eventStreamHandler.$streamObject.sink { resObj in
+            eventSource.currentStreamToken.send(resObj)
+            
+            // check for end of stream. send complete signal to subscribers if found.
+            if let finishReason = resObj?.choices.first?.finishReason {
+                print("pub finished with reason: \(finishReason)")
+                eventSource.currentStreamToken.send(completion: .finished)
+            }
+        }.store(in: &streams)
+        
+        eventSource.start()
+        return eventSource.streamPublisher.compactMap({$0 as? OpenAI}).eraseToAnyPublisher()
     }
 }
 
@@ -207,4 +294,11 @@ extension OpenAISwift {
         }
 
     }
+}
+
+
+extension OpenAISwift {
+    
+    
+    
 }

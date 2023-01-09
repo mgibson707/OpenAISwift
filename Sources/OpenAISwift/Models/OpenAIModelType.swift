@@ -9,6 +9,7 @@ import Foundation
 
 /// The type of model used to generate the output
 public enum OpenAIModelType {
+    
     /// ``GPT3`` Family of Models
     case gpt3(GPT3)
     
