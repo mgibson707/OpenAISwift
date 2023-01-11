@@ -30,7 +30,7 @@ final class OpenAISwiftTests: XCTestCase {
         guard let tester = tester else {XCTFail("No Tester"); throw TestError.noTester}
         //let expectedResponse = expectation(description: "Generated response text")
         
-        guard let pub = tester.completionStreamPublisherv2(with: "Pretend you are a pirate teaching a class on large language models:", maxTokens: 128)?
+        guard let pub = tester.streamCompletion(with: "Pretend you are a pirate teaching a class on large language models:", maxTokens: 64)?
         .compactMap(\.choices.first?.text).scan(String(), { accumulated, latest in
             return accumulated + latest
         }).eraseToAnyPublisher() else {
@@ -51,7 +51,7 @@ final class OpenAISwiftTests: XCTestCase {
         let expectedResponse = expectation(description: "Generated response text")
         
         var subs = Set<AnyCancellable>()
-        let pub = tester.completionStreamPublisherv2(with: "If large language models were animals, they would be", maxTokens: 128)
+        let pub = tester.streamCompletion(with: "If large language models were animals, they would be", maxTokens: 64)
         pub?.compactMap(\.choices.first?.text).scan(String(), { accumulated, latest in
             return accumulated + latest
         }).sink { completed in
@@ -72,29 +72,6 @@ final class OpenAISwiftTests: XCTestCase {
 
     }
     
-//    func testStreamPub() throws {
-//        guard let tester = tester else {XCTFail("No Tester"); throw TestError.noTester}
-//        let expectedResponse = expectation(description: "Generated response text")
-//
-//        var subs = Set<AnyCancellable>()
-//        let pub = tester.completionStreamPublisher(with: "Write me a New York Times headline announcing a dog has been elected as president.", maxTokens: 64)
-//        pub?.sink { completed in
-//            switch completed {
-//            case .failure(let err):
-//                print("Finished Pub with error: \(err)")
-//                XCTFail("stream finished with error")
-//            case .finished:
-//                print("Pub finished without error")
-//            }
-//            expectedResponse.fulfill()
-//        } receiveValue: { resObj in
-//            print(resObj ?? "nil")
-//        }.store(in: &subs)
-//
-//        wait(for: [expectedResponse], timeout: 40)
-//
-//
-//    }
     
     // Testing clusure based method. Uses XCTestExpectations to make test wait for result.
     func testExample() throws {

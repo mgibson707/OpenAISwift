@@ -28,7 +28,7 @@ extension StreamEventHandler {
     }
     
     public func onMessage(eventType: String, messageEvent: LDSwiftEventSource.MessageEvent) {
-        
+        // onMessage is not necessary to implement for this use case b/c currentStreamMessage is updated automatically by SwiftEventSource Lib
     }
 
 
@@ -53,8 +53,8 @@ class OpenAIStreamHandler: StreamEventHandler {
 
     
     // publisher that decodes currentStreamMessage to OpenAI objects
-    // - checks for [DONE] in the message data, terminating the stream when it is found
-    // -
+    // - guard check for [DONE] in the message data, terminating the stream when it is found
+    // - checks each parsed message for `finishReason` and stores it when found
     lazy var currentStreamObject: AnyPublisher<OpenAI, Error> = {
         currentStreamMessage.compactMap({$0}).compactMap{ (messageEvent: MessageEvent) -> OpenAI? in
             // check for OpenAI [DONE], if recieved, call `onGenerationStreamComplete` handler and fast exit.
