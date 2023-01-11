@@ -9,10 +9,9 @@ import Foundation
 import LDSwiftEventSource
 import Combine
 
-public protocol StreamEventHandler: EventHandler {
+protocol StreamEventHandler: EventHandler {
     var finishReason: Choice.FinishReason? { get set }
-    mutating func onOpenAIStreamingGeneration(streamingMessage: OpenAI)
-    func onGenerationStreamCompleted(with finishReason: Choice.FinishReason?)
+    func onCompletedOpenAIStreaming(with generationFinishReason: Choice.FinishReason?)
 }
 
 extension StreamEventHandler {
@@ -28,80 +27,76 @@ extension StreamEventHandler {
         print("[OpenAIStreamHandler] Stream closed." + "\n")
     }
     
-    
-    // don't implement `onMessage` in concrete classes. this protocol is already openai only, so specific handling will happen here.
-    public mutating func onMessage(eventType: String, messageEvent: LDSwiftEventSource.MessageEvent) {
-        //print("[OpenAIStreamHandler] Stream received \(eventType) event: \(messageEvent)." + "\n")
+    public func onMessage(eventType: String, messageEvent: LDSwiftEventSource.MessageEvent) {
         
-        // check for OpenAI [DONE], if recieved, call `onGenerationStreamComplete` handler and fast exit.
-        if messageEvent.data.hasPrefix("[DONE]") {
-            print("OpenAI Generation stream finished successfully. Will close stream now...")
-            self.onGenerationStreamCompleted(with: self.finishReason)
-            return
-        }
-        
-        // decode response JSON. First turn JSON string to Data, then decode data to codable object type `OpenAI`
-        if let messageData = messageEvent.data.data(using: .utf8, allowLossyConversion: false) {
-            
-            if let openAIResp = try? JSONDecoder().decode(OpenAI.self, from: messageData) {
-                // send decoded response OpenAI object to openAI response handler
-                self.onOpenAIStreamingGeneration(streamingMessage: openAIResp)
-                
-                // check for a `fninish_reason` and store if it exists.
-                // This will be returned with stream completion.
-                if let finishReason = openAIResp.choices.first?.finishReason {
-                    self.finishReason = finishReason
-                }
-                
-            }
-
-        }
-
-
     }
-    
+
+
     public func onComment(comment: String) {
         print("[OpenAIStreamHandler] Stream received comment: \(comment)" + "\n")
 
     }
     
-    public func onError(error: Error) {
-        print("[OpenAIStreamHandler] Stream encountered Error! \(error.localizedDescription)" + "\n")
+    func onError(error: Error) {
+        self.currentStreamMessage.send(completion: .failure(error))
     }
+ 
 }
 
-public class OpenAIStreamHandler: StreamEventHandler, ObservableObject {
+class OpenAIStreamHandler: StreamEventHandler {
     
-    @Published var streamAccumulator: String = ""
-    @Published var streamLatest: String = ""
+    /// `EventHandler` protocol conformance
+    public var currentStreamMessage = CurrentValueSubject<LDSwiftEventSource.MessageEvent?, Error>(nil)
     
-    @Published var streamObject: OpenAI?
-    @Published var streamError: Error?
+    /// `StreamEventHandler` protocol conformance
+    var finishReason: Choice.FinishReason?
+
     
-    public var finishReason: Choice.FinishReason?
-        
-    public func onOpenAIStreamingGeneration(streamingMessage: OpenAI) {
-        //print("Got OpenAI Response Object: \(streamingGenerationResponse.choices.first?.text ?? "N/A")")
-        streamObject = streamingMessage
-        if let text = streamingMessage.choices.first?.text {
-            streamAccumulator += text
-            streamLatest = text
-        }
-        //print(streamAccumulator)
-        
-        
-    }
-    
-    public func onGenerationStreamCompleted(with finishReason: Choice.FinishReason?) {
+    // publisher that decodes currentStreamMessage to OpenAI objects
+    // - checks for [DONE] in the message data, terminating the stream when it is found
+    // -
+    lazy var currentStreamObject: AnyPublisher<OpenAI, Error> = {
+        currentStreamMessage.compactMap({$0}).compactMap{ (messageEvent: MessageEvent) -> OpenAI? in
+            // check for OpenAI [DONE], if recieved, call `onGenerationStreamComplete` handler and fast exit.
+            if messageEvent.data.hasPrefix("[DONE]") {
+                print("OpenAI Generation stream [DONE] sending SSE events. Stream will close now...")
+                
+                // onCompleted will send `.finished` completion event to `currentStreamMessage` aka this publishers upstream.
+                self.onCompletedOpenAIStreaming(with: self.finishReason)
+                
+                // Return nil to prevent passing the done event downstream as a recieveValue event,
+                // instead we want to send a completion event to terminate the publisher stream.
+                return nil
+            }
+            // decode response JSON. First turn JSON string to Data, then decode data to codable object type `OpenAI`
+            if let messageData = messageEvent.data.data(using: .utf8, allowLossyConversion: false) {
+                if let openAIResp = try? JSONDecoder().decode(OpenAI.self, from: messageData) {
+                    // check for a `fninish_reason` and store if it exists.
+                    // This will be returned with onCompletedOpenAIStreaming handler.
+                    if let finishReason = openAIResp.choices.first?.finishReason {
+                        self.finishReason = finishReason
+                    }
+                    
+                    // decoded OpenAI object to go downstream
+                    return openAIResp
+                }
+            }
+            return nil
+            
+        }.eraseToAnyPublisher()
+    }()
+
+    /// `StreamEventHandler` protocol conformance
+    func onCompletedOpenAIStreaming(with generationFinishReason: Choice.FinishReason?) {
         //todo
-        print("finished stream with \(finishReason == nil ? "nil/unknown reason" : finishReason!.rawValue) 🏁")
+        print("finished stream with \(generationFinishReason == nil ? "nil/unknown reason" : generationFinishReason!.rawValue) 🏁")
+        self.currentStreamMessage.send(completion: .finished)
     }
+
+
+    // `onError(error: Error)` default protocol implementation automatically sends errors to StreamEventHandler's currentStreamMessage
+
     
-
-    public func onError(error: Error) {
-        streamError = error
-    }
-
     
     
     

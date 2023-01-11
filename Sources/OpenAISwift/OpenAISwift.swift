@@ -25,6 +25,8 @@ public class OpenAISwift {
     //private var eventHandler: EventHandler = OpenAIStreamHandler()
     
     private var streams = Set<AnyCancellable>()
+    
+    private var eventSources = Array<EventSource>()
 
     public init(authToken: String) {
         self.token = authToken
@@ -60,7 +62,71 @@ public class OpenAISwift {
 //        return EventSource(config: eventSourceConfig)
 //    }
     
-    public func completionStreamPublisher(for model: OpenAIModelType = .gpt3(.davinci), with prompt: String, maxTokens: Int = 16) -> AnyPublisher<OpenAI?, Error>? {
+//    public func completionStreamPublisher(for model: OpenAIModelType = .gpt3(.davinci), with prompt: String, maxTokens: Int = 16) -> AnyPublisher<OpenAI?, Error>? {
+//
+//        // Handler for events recieved on the EventSource stream once started
+//        let eventStreamHandler: OpenAIStreamHandler = OpenAIStreamHandler()
+//
+//        // Create a configuration struct, initialized with the event handler and generations endpoint URL
+//        var config = EventSource.Config(handler: eventStreamHandler, url: Endpoint.completions.fullURL())
+//
+//        // add auth header to config if auth token is set
+//        if let token = token, !token.isEmpty {
+//            config.headers = ["Authorization": "Bearer \(token)",
+//                              "Accept": "text/event-stream",
+//                              "Cache-Control": "no-cache",
+//                              "Content-Type": "application/json",
+//                              "Host": "api.openai.com"]
+//        } else {
+//            print("[OpenAISwift] Warning: No Auth Key Provided. Please configure your API Key")
+//            return nil
+//        }
+//        // config disable retry on error
+//        config.connectionErrorHandler = { _ in .shutdown }
+//        // config HTTP request Method
+//        config.method = Endpoint.completions.method
+//
+//        // config HTTP request body
+//        let body = Command(prompt: prompt, model: model.modelName, maxTokens: maxTokens, stream: true)
+//        guard let bodyData = try? JSONEncoder().encode(body) else {
+//            print("[OpenAISwift] Warning: Body data could not be encoded to JSON. Cannot create stream.")
+//            return nil
+//        }
+//        config.body = bodyData
+//
+//        // Create EventSource object for this generation response stream
+//        let eventSource = EventSource(config: config)
+//
+//        // route stream handler objects to EventSource publisher
+//        eventStreamHandler.$streamObject.compactMap({$0}).sink { resObj in
+//            DispatchQueue.main.async {
+//                eventSource.currentStreamToken.send(resObj)
+//
+//            }
+//
+//            // check for end of stream. send complete signal to subscribers if found.
+//            if (resObj?.choices.first?.finishReason) != nil {
+//                DispatchQueue.main.async {
+//                    eventSource.currentStreamToken.send(completion: .finished)
+//                }
+//            }
+//        }.store(in: &streams)
+//
+//        // route stream error to EventSource publisher - complete with error
+//        eventStreamHandler.$streamError.compactMap({$0}).sink { errorInStream in
+//            DispatchQueue.main.async {
+//                eventSource.currentStreamToken.send(completion: .failure(errorInStream))
+//            }
+//        }.store(in: &streams)
+//
+//        //TODO: get rid of this ambiguous timing for starting
+//        //start the stream before returning
+//        eventSource.start()
+//        return eventSource.streamPublisher.compactMap({$0 as? OpenAI}).eraseToAnyPublisher()
+//    }
+    
+    
+    public func completionStreamPublisherv2(for model: OpenAIModelType = .gpt3(.davinci), with prompt: String, maxTokens: Int = 16) -> AnyPublisher<OpenAI, Error>? {
         
         // Handler for events recieved on the EventSource stream once started
         let eventStreamHandler: OpenAIStreamHandler = OpenAIStreamHandler()
@@ -94,32 +160,11 @@ public class OpenAISwift {
 
         // Create EventSource object for this generation response stream
         let eventSource = EventSource(config: config)
-        
-        // route stream handler objects to EventSource publisher
-        eventStreamHandler.$streamObject.sink { resObj in
-            DispatchQueue.main.async {
-                eventSource.currentStreamToken.send(resObj)
-
-            }
-            
-            // check for end of stream. send complete signal to subscribers if found.
-            if let finishReason = resObj?.choices.first?.finishReason {
-                print("pub finished with reason: \(finishReason)")
-                DispatchQueue.main.async {
-                    eventSource.currentStreamToken.send(completion: .finished)
-                }
-            }
-        }.store(in: &streams)
-        
-        // route stream error to EventSource publisher - complete with error
-        eventStreamHandler.$streamError.compactMap({$0}).sink { errorInStream in
-            eventSource.currentStreamToken.send(completion: .failure(errorInStream))
-        }.store(in: &streams)
-        
-        //TODO: get rid of this ambiguous timing for starting
-        //start the stream before returning
+        eventSources.append(eventSource)
         eventSource.start()
-        return eventSource.streamPublisher.compactMap({$0 as? OpenAI}).eraseToAnyPublisher()
+
+        return eventStreamHandler.currentStreamObject.eraseToAnyPublisher()
+
     }
 }
 
