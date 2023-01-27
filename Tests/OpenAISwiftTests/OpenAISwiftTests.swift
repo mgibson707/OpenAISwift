@@ -15,20 +15,30 @@ final class OpenAISwiftTests: XCTestCase {
         tester = OpenAISwift(authToken: Constants.openAIAPIKey)
     }
     
-//    func testStreamer() throws {
-//        guard let tester = tester else {XCTFail("No Tester"); throw TestError.noTester}
-//        let expectedResponse = expectation(description: "Generated response text")
-//
-//        let source = try tester.configureStreaming(with: "Here's the thing about large larguage models,", maxTokens: 64)
-//        source.start()
-//        wait(for: [expectedResponse], timeout: 20)
-//
-//    }
+    @available(iOS 16.0, *)
+    func testStop() async throws {
+        guard let tester = tester else {XCTFail("No Tester"); throw TestError.noTester}
+        
+        // stops on the number `7`
+        guard let pub = tester.streamCompletion(with: "list the numbers between 1 and 10, one number on each line:", maxTokens: 64, stop: ["7"])?
+        .compactMap(\.choices.first?.text).scan(String(), { accumulated, latest in
+            return accumulated + latest
+        }).eraseToAnyPublisher() else {
+            XCTFail("No Publisher")
+            throw TestError.noPublisher
+        }
+        
+        for try await partial in pub.values {
+            print(partial)
+            XCTAssertFalse(partial.contains("7"))
+        }
+
+
+    }
     
     @available(iOS 16.0, *)
     func testStreamPubV2Async() async throws {
         guard let tester = tester else {XCTFail("No Tester"); throw TestError.noTester}
-        //let expectedResponse = expectation(description: "Generated response text")
         
         guard let pub = tester.streamCompletion(with: "Pretend you are a pirate teaching a class on large language models:", maxTokens: 64)?
         .compactMap(\.choices.first?.text).scan(String(), { accumulated, latest in
