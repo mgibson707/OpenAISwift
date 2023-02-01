@@ -25,7 +25,7 @@ public class OpenAISwift {
         self.token = authToken
     }
 
-    public func streamCompletion(with prompt: String, for model: OpenAIModelType = .gpt3(.davinci), maxTokens: Int = 16, stop: [String]? = nil) -> AnyPublisher<OpenAI, Error>? {
+    public func streamCompletion(with prompt: String, for model: OpenAIModelType = .gpt3(.davinci), maxTokens: Int = 16, stop: [String]? = nil, echo: Bool = false) -> AnyPublisher<OpenAI, Error>? {
         
         // Handler for events recieved on the EventSource stream once started
         let eventStreamHandler: OpenAIStreamHandler = OpenAIStreamHandler()
@@ -50,7 +50,7 @@ public class OpenAISwift {
         config.method = Endpoint.completions.method
     
         // config HTTP request body
-        let body = Command(prompt: prompt, model: model.modelName, maxTokens: maxTokens, stream: true, stop: stop)
+        let body = Command(prompt: prompt, model: model.modelName, maxTokens: maxTokens, stream: true, stop: stop, echo: echo)
         guard let bodyData = try? JSONEncoder().encode(body) else {
             print("[OpenAISwift] Warning: Body data could not be encoded to JSON. Cannot create stream.")
             return nil
@@ -74,9 +74,9 @@ extension OpenAISwift {
     ///   - model: The AI Model to Use. Set to `OpenAIModelType.gpt3(.davinci)` by default which is the most capable model
     ///   - maxTokens: The limit character for the returned response, defaults to 16 as per the API
     ///   - completionHandler: Returns an OpenAI Data Model
-    public func sendCompletion(with prompt: String, model: OpenAIModelType = .gpt3(.davinci), maxTokens: Int = 16, stop: [String]? = nil, completionHandler: @escaping (Result<OpenAI, OpenAIError>) -> Void) {
+    public func sendCompletion(with prompt: String, model: OpenAIModelType = .gpt3(.davinci), maxTokens: Int = 16, stop: [String]? = nil, echo: Bool = false, completionHandler: @escaping (Result<OpenAI, OpenAIError>) -> Void) {
         let endpoint = Endpoint.completions
-        let body = Command(prompt: prompt, model: model.modelName, maxTokens: maxTokens, stop: stop)
+        let body = Command(prompt: prompt, model: model.modelName, maxTokens: maxTokens, stop: stop, echo: echo)
         let request = prepareRequest(endpoint, body: body)
         
         makeRequest(request: request) { result in
@@ -163,9 +163,9 @@ extension OpenAISwift {
     /// - Returns: Returns an OpenAI Data Model
     @available(swift 5.5)
     @available(macOS 10.15, iOS 13, watchOS 6, tvOS 13, *)
-    public func sendCompletion(with prompt: String, model: OpenAIModelType = .gpt3(.davinci), maxTokens: Int = 16, stop: [String]? = nil) async throws -> OpenAI {
+    public func sendCompletion(with prompt: String, model: OpenAIModelType = .gpt3(.davinci), maxTokens: Int = 16, stop: [String]? = nil, echo: Bool = false) async throws -> OpenAI {
         return try await withCheckedThrowingContinuation { continuation in
-            sendCompletion(with: prompt, model: model, maxTokens: maxTokens, stop: stop) { result in
+            sendCompletion(with: prompt, model: model, maxTokens: maxTokens, stop: stop, echo: echo) { result in
                 continuation.resume(with: result)
             }
         }
@@ -196,11 +196,11 @@ extension OpenAISwift {
     ///   - model: The AI Model to Use. Set to `OpenAIModelType.gpt3(.davinci)` by default which is the most capable model
     ///   - maxTokens: The limit character for the returned response, defaults to 16 as per the API
     ///   - completionHandler: Returns an OpenAI Data Model
-    public func getCompletion(with prompt: String, model: OpenAIModelType = .gpt3(.davinci), maxTokens: Int = 16, stop: [String]? = nil) -> Future<OpenAI, OpenAIError> {
+    public func getCompletion(with prompt: String, model: OpenAIModelType = .gpt3(.davinci), maxTokens: Int = 16, stop: [String]? = nil, echo: Bool = false) -> Future<OpenAI, OpenAIError> {
         return Future() { [weak self] promise in
             guard let self = self else {promise(.failure(.noClient)); return}
             let endpoint = Endpoint.completions
-            let body = Command(prompt: prompt, model: model.modelName, maxTokens: maxTokens, stop: stop)
+            let body = Command(prompt: prompt, model: model.modelName, maxTokens: maxTokens, stop: stop, echo: echo)
             let request = self.prepareRequest(endpoint, body: body)
             
             self.makeRequest(request: request) { result in
